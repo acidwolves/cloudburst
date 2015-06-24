@@ -93,11 +93,11 @@ launched_modules = {}
 
 while 1:
 	config = get_config()
-		for task in config:
-			if task['module'] not in launched_modules.keys():
-				stop_event = threading.Event()
-				thread = threading.Thread(target=loop_module_runner, args=(task['module'], task.get('lapse', '0'), stop_event))
-				launched_modules[task['module']] = {'thread' : thread, 'stop_event' : stop_event}
-				launched_modules[task['module']]['thread'].start()
+	for task in config:
+		if task['module'] not in launched_modules.keys():
+			stop_event = threading.Event()
+			thread = threading.Thread(target=loop_module_runner, args=(task['module'], task.get('lapse', '0'), stop_event))
+			launched_modules[task['module']] = {'thread' : thread, 'stop_event' : stop_event}
+			launched_modules[task['module']]['thread'].start()
 	
 	time.sleep(random.randint(60, 120)) # every 1-2 mins config file is scanned for new modules
