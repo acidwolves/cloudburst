@@ -34,7 +34,7 @@ def get_file_sha(filepath):
 	tree = branch.commit.commit.tree.recurse()
 	for filename in tree.tree:
 		if filepath in filename.path:
-			print '[*] found file %s' % filepath
+			#print '[*] found file %s' % filepath
 			blob = filename._json_data['sha']
 			return blob
 	return None
@@ -56,12 +56,15 @@ def store_module_result(data, path=None):
 	if not path: path = 'data/%s/%d.data' % (para_id, random.randint(1000,100000))
 	else: path = 'data/'+para_id+'/'+path
 	gh, repo, branch = connect_to_github()
-	print 'saving ' + path
-	try:
+	
+	sha = get_file_sha(path)
+
+	if sha:
+		repo.update_file(path, 'added data', data, sha)
+	else:
 		repo.create_file(path, 'added data', data)
-	except:
-		repo.update_file(path, 'added data', data, get_file_sha(path))
-	print 'done'
+
+	print ' [*] '+path+' stored'
 	return
 
 class GitImporter(object):
